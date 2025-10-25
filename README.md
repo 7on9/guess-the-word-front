@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎭 Undercover Game Frontend
 
-## Getting Started
+A modern web application for playing the Undercover word guessing game with friends. Built with Next.js 16, TypeScript, React Query, and Tailwind CSS.
 
-First, run the development server:
+![Undercover Game](https://img.shields.io/badge/Game-Undercover-blue)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
+![Tailwind](https://img.shields.io/badge/Tailwind-4-06B6D4)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🎮 About the Game
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Undercover is a social deduction game where players receive either a "civilian" word or an "undercover" word. Through discussion and voting, players must identify and eliminate the undercover agents while the undercover players try to blend in and survive.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Quick Start
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Set up environment:**
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your backend API URL
+   ```
 
-## Learn More
+2. **Install dependencies:**
+   ```bash
+   yarn install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+3. **Start development server:**
+   ```bash
+   yarn dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **Open in browser:**
+   Visit [http://localhost:3000](http://localhost:3000)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📋 Full Setup Instructions
 
-## Deploy on Vercel
+For detailed setup instructions, project structure, and API documentation, see **[SETUP.md](./SETUP.md)**.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## ✨ Features
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 🏠 **Room Management** - Create and manage game rooms
+- 👥 **Player Management** - Add players and organize seating order
+- 🎯 **Game Flow** - Start games and manage game states
+- 📝 **Word Management** - Add and manage word pairs for the game
+- 📊 **Scoreboard** - Track player statistics and performance
+- 🎨 **Modern UI** - Responsive design with dark/light mode
+- ⚡ **Real-time Updates** - Powered by React Query for fast data sync
+
+## 🛠 Tech Stack
+
+- **Framework:** Next.js 16 with App Router
+- **Language:** TypeScript with strict mode
+- **Styling:** Tailwind CSS v4 with CSS custom properties
+- **State Management:** React Query (TanStack Query) for server state
+- **HTTP Client:** Axios with interceptors
+- **UI Components:** Custom components with shadcn/ui design patterns
+- **Icons:** Lucide React
+
+## 🎯 Project Status
+
+This is the initial implementation of the Undercover Game frontend. Core room and game management features are implemented and ready for use with the backend API.
+
+### ✅ Implemented
+- Room creation and management
+- Player management (add, list, reorder)
+- Game creation and basic controls
+- Word pair management
+- Responsive UI with modern design
+- Full TypeScript coverage
+
+### 🚧 Coming Soon
+- Real-time game rounds and voting
+- Player role assignment and reveals
+- Game results and winner determination
+- Advanced statistics and analytics
+- Real-time multiplayer features
+
+## 🔗 Related Projects
+
+- **Backend API:** [Undercover Game Backend](../guess-the-word-back/) (NestJS + TypeORM + PostgreSQL)
+
+## 📄 License
+
+This project is part of the Undercover Game suite. See the main project for licensing information.
