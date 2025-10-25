@@ -24,11 +24,22 @@ function GameDetailContent() {
 
   // Reorder state
   const [reorderMode, setReorderMode] = useState(false);
-  const [localPlayerOrder, setLocalPlayerOrder] = useState<Array<{id: string, name: string, avatar?: string, role?: 'civilian' | 'undercover' | 'mr_white', isEliminated: boolean, orderIndex: number}>>([]);
+  const [localPlayerOrder, setLocalPlayerOrder] = useState<Array<{id: string, gamePlayerId: string, name: string, avatar?: string, role?: 'civilian' | 'undercover' | 'mr_white', isEliminated: boolean, orderIndex: number}>>([]);
 
   const { data: game, isLoading, error } = useGame(gameId);
   const startGameMutation = useStartGame();
   const reorderPlayersMutation = useReorderGamePlayers();
+
+  // Debug logging
+  console.log("Game data loaded:", {
+    gameId,
+    game,
+    gamePlayers: game?.gamePlayers,
+    players: game?.players,
+    playersCount: game?.players?.length || 0,
+    isLoading,
+    error
+  });
 
   const handleStartGame = async () => {
     if (!confirm("Are you sure you want to start this game?")) return;
@@ -55,7 +66,7 @@ function GameDetailContent() {
     if (!localPlayerOrder.length) return;
 
     try {
-      const playerOrder = localPlayerOrder.map(player => player.id);
+      const playerOrder = localPlayerOrder.map(player => player.gamePlayerId);
       await reorderPlayersMutation.mutateAsync({
         gameId: gameId,
         playerOrder: playerOrder,

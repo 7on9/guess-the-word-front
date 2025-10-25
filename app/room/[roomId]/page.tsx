@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useRoom, useGroup, useCreateGame } from "@/lib/hooks";
+import { useRoom, useGroup, useCreateGame, useAddMultiplePlayersToGame } from "@/lib/hooks";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,22 +29,61 @@ function RoomDetailContent() {
   const { data: room, isLoading: roomLoading, error: roomError } = useRoom(roomId);
   const { data: group, isLoading: groupLoading } = useGroup(room?.groupId || '');
   const createGameMutation = useCreateGame();
+  const addPlayersToGameMutation = useAddMultiplePlayersToGame();
 
   const handleCreateGame = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsCreatingGame(true);
 
     try {
+      // Step 1: Create the game
       const newGame = await createGameMutation.mutateAsync({
         roomId: roomId,
         gameMode: gameMode,
         undercoverCount: undercoverCount,
         mrWhiteCount: mrWhiteCount,
       });
+
+      // Step 2: If room has a group, automatically add all group players to the game
+      if (group?.players && group.players.length > 0) {
+        const playersToAdd = group.players.map(player => ({
+          name: player.name,
+          avatar: player.avatar
+        }));
+
+        console.log(`Adding ${playersToAdd.length} players from group "${group.name}" to game ${newGame.id}...`);
+        console.log("Players to add:", playersToAdd);
+        
+        try {
+          const result = await addPlayersToGameMutation.mutateAsync({
+            gameId: newGame.id,
+            players: playersToAdd
+          });
+          
+          console.log("Players successfully added to game!");
+          console.log("Add players result:", result);
+          
+          // Wait a moment for the query to invalidate and refetch
+          console.log("Waiting for data to refresh...");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (addPlayersError) {
+          console.error("Failed to add players to game:", addPlayersError);
+          // Continue anyway to show the game, but log the error
+          alert(`Game created but failed to add players: ${addPlayersError}`);
+        }
+      } else {
+        console.log("No group or players found to transfer");
+        console.log("Group data:", group);
+      }
+
       setIsCreatingGame(false);
       // Navigate to the new game
+      console.log(`Navigating to game: /room/${roomId}/game/${newGame.id}`);
       window.location.href = `/room/${roomId}/game/${newGame.id}`;
     } catch (error) {
-      console.error("Failed to create game:", error);
+      console.error("Failed to create game or add players:", error);
+      setIsCreatingGame(false);
     }
   };
 
@@ -101,10 +140,19 @@ function RoomDetailContent() {
 
           <div className="flex items-center gap-2">
             {!isCreatingGame && (
-              <Button onClick={() => setIsCreatingGame(true)} className="flex items-center gap-2">
+              <Button 
+                onClick={() => {
+                  console.log("Create Game button clicked");
+                  setIsCreatingGame(true);
+                }} 
+                className="flex items-center gap-2"
+              >
                 <Plus className="h-4 w-4" />
                 Create Game
               </Button>
+            )}
+            {isCreatingGame && (
+              <span className="text-sm text-muted-foreground">Form is open below ↓</span>
             )}
           </div>
         </div>
@@ -115,8 +163,15 @@ function RoomDetailContent() {
             <CardHeader>
               <CardTitle>Create New Game</CardTitle>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleCreateGame} className="space-y-4">
+          <CardContent>
+            {group?.players && group.players.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Auto-Transfer Players:</strong> All {group.players.length} players from the group "{group.name}" will be automatically added to this game.
+                </p>
+              </div>
+            )}
+            <form onSubmit={handleCreateGame} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div>
                     <label className="text-sm font-medium">Game Mode</label>
@@ -160,9 +215,22 @@ function RoomDetailContent() {
                 <div className="flex gap-2">
                   <Button 
                     type="submit" 
-                    disabled={createGameMutation.isPending}
+                    disabled={createGameMutation.isPending || addPlayersToGameMutation.isPending}
+                    onClick={() => {
+                      console.log("Submit button clicked - states:", {
+                        isCreatingGame,
+                        createGamePending: createGameMutation.isPending,
+                        addPlayersPending: addPlayersToGameMutation.isPending,
+                        gameMode,
+                        groupPlayersCount: group?.players?.length || 0
+                      });
+                    }}
                   >
-                    {createGameMutation.isPending ? "Creating..." : "Create Game"}
+                    {createGameMutation.isPending 
+                      ? "Creating Game..." 
+                      : addPlayersToGameMutation.isPending 
+                      ? "Adding Players..." 
+                      : "Create Game"}
                   </Button>
                   <Button 
                     type="button" 

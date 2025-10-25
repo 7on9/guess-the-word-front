@@ -37,11 +37,27 @@ export interface Game {
   createdAt: string;
   startedAt?: string;
   endedAt?: string;
-  players?: Array<GamePlayer>;
+  gamePlayers: Array<GamePlayerRelation>;
+  players?: Array<GamePlayer>; // Computed field for backward compatibility
+}
+
+export interface GamePlayerRelation {
+  id: string; // GamePlayer entity ID
+  gameId: string;
+  playerId: string;
+  role: 'civilian' | 'undercover' | 'mr_white';
+  status: 'alive' | 'eliminated';
+  turnOrder: number;
+  player: {
+    id: string; // Player entity ID
+    name: string;
+    avatar?: string;
+  };
 }
 
 export interface GamePlayer {
-  id: string;
+  id: string; // Player entity ID (for display)
+  gamePlayerId: string; // GamePlayer entity ID (for API calls like reordering)
   name: string;
   avatar?: string;
   role?: 'civilian' | 'undercover' | 'mr_white';
@@ -227,11 +243,47 @@ export const useAddPlayerToGame = () => {
   });
 };
 
+export const useAddMultiplePlayersToGame = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: { gameId: string; players: Array<{name: string, avatar?: string}> }) => {
+      const results = [];
+      console.log(`Starting to add ${data.players.length} players to game ${data.gameId}`);
+      
+      for (let i = 0; i < data.players.length; i++) {
+        const player = data.players[i];
+        try {
+          console.log(`Adding player ${i + 1}/${data.players.length}: ${player.name}`);
+          const response = await api.post(`/games/${data.gameId}/players`, player);
+          console.log(`Successfully added ${player.name}:`, response.data);
+          results.push(response.data);
+        } catch (error: any) {
+          console.error(`Failed to add player ${player.name}:`, error);
+          console.error("Error details:", error.response?.data);
+          throw new Error(`Failed to add player "${player.name}": ${error.response?.data?.message || error.message}`);
+        }
+      }
+      
+      console.log(`Successfully added all ${results.length} players to game`);
+      return results;
+    },
+    onSuccess: (results, variables) => {
+      console.log(`Invalidating queries for game ${variables.gameId} after adding ${results.length} players`);
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId] });
+    },
+    onError: (error, variables) => {
+      console.error(`Failed to add players to game ${variables.gameId}:`, error);
+    },
+  });
+};
+
 export const useReorderGamePlayers = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (data: { gameId: string; playerOrder: Array<string> }) => {
+      // Note: playerOrder should contain GamePlayer entity IDs, not Player entity IDs
       const response = await api.put(`/games/${data.gameId}/players/reorder`, {
         playerOrder: data.playerOrder,
       });
@@ -249,7 +301,22 @@ export const useGame = (gameId: string) =>
     queryKey: ["games", gameId],
     queryFn: async (): Promise<Game> => {
       const response = await api.get(`/games/${gameId}`);
-      return response.data;
+      const gameData = response.data;
+      
+      // Transform gamePlayers to players for backward compatibility
+      if (gameData.gamePlayers) {
+        gameData.players = gameData.gamePlayers.map((gamePlayer: GamePlayerRelation): GamePlayer => ({
+          id: gamePlayer.player.id, // Player entity ID (for display)
+          gamePlayerId: gamePlayer.id, // GamePlayer entity ID (for API calls)
+          name: gamePlayer.player.name,
+          avatar: gamePlayer.player.avatar,
+          role: gamePlayer.role,
+          isEliminated: gamePlayer.status === 'eliminated',
+          orderIndex: gamePlayer.turnOrder
+        }));
+      }
+      
+      return gameData;
     },
     enabled: !!gameId,
   });
