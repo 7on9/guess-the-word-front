@@ -74,6 +74,49 @@ export interface WordPair {
   createdAt: string;
 }
 
+export interface Round {
+  id: string;
+  gameId: string;
+  roundNumber: number;
+  starterId: string; // GamePlayer ID of the starting player
+  status: 'describing' | 'voting' | 'completed';
+  descriptions: Array<PlayerDescription>;
+  votes: Array<Vote>;
+  eliminatedPlayerId?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface PlayerDescription {
+  id: string;
+  roundId: string;
+  gamePlayerId: string;
+  description: string;
+  order: number;
+  createdAt: string;
+}
+
+export interface Vote {
+  id: string;
+  roundId: string;
+  voterId: string; // GamePlayer ID who voted
+  votedForId: string; // GamePlayer ID who was voted for
+  createdAt: string;
+}
+
+export interface RoundResult {
+  roundId: string;
+  eliminatedPlayerId?: string;
+  voteResults: Array<{
+    gamePlayerId: string;
+    playerName: string;
+    voteCount: number;
+  }>;
+  tie: boolean;
+  gameEnded: boolean;
+  winner?: 'civilians' | 'undercover' | 'mr_white';
+}
+
 // Group Hooks (using Groups as primary entity for the UI)
 export const useGroups = () =>
   useQuery({
@@ -384,6 +427,106 @@ export const useStartGame = () => {
     },
   });
 };
+
+// Round Management Hooks
+export const useCurrentRound = (gameId: string) =>
+  useQuery({
+    queryKey: ["games", gameId, "current-round"],
+    queryFn: async () => {
+      const response = await api.get(`/games/${gameId}/rounds/current`);
+      return response.data;
+    },
+    enabled: !!gameId,
+  });
+
+export const useNextRound = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (gameId: string) => {
+      try {
+        const response = await api.post(`/games/${gameId}/next-round`);
+        return response.data;
+      } catch (error: any) {
+        console.error('Next round error:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          gameId
+        });
+        throw error;
+      }
+    },
+    onSuccess: (_, gameId) => {
+      queryClient.invalidateQueries({ queryKey: ["games", gameId] });
+      queryClient.invalidateQueries({ queryKey: ["games", gameId, "current-round"] });
+    },
+  });
+};
+
+export const useSubmitVote = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: { gameId: string; voterId: string; votedForId: string }) => {
+      const response = await api.post(`/games/${data.gameId}/vote`, {
+        voterId: data.voterId,
+        votedForId: data.votedForId,
+      });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId, "current-round"] });
+    },
+  });
+};
+
+export const useProcessRound = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (gameId: string) => {
+      const response = await api.post(`/games/${gameId}/process-round`);
+      return response.data;
+    },
+    onSuccess: (_, gameId) => {
+      queryClient.invalidateQueries({ queryKey: ["games", gameId] });
+      queryClient.invalidateQueries({ queryKey: ["games", gameId, "current-round"] });
+    },
+  });
+};
+
+export const useEliminatePlayer = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: { gameId: string; playerId: string }): Promise<{
+      eliminatedPlayer: any;
+      role: string;
+      gameFinished: boolean;
+      winner?: string;
+    }> => {
+      const response = await api.post(`/games/${data.gameId}/eliminate-player`, {
+        playerId: data.playerId
+      });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId] });
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId, "current-round"] });
+    },
+  });
+};
+
+export const useGameHistory = (gameId: string) =>
+  useQuery({
+    queryKey: ["games", gameId, "history"],
+    queryFn: async () => {
+      const response = await api.get(`/games/${gameId}/history`);
+      return response.data;
+    },
+    enabled: !!gameId,
+  });
 
 
 // Word Management Hooks
