@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { useGame, useCurrentRound, useSubmitVote, useProcessRound, useNextRound, useEliminatePlayer } from "@/lib/hooks";
+import { useGame, useCurrentRound, useSubmitVote, useProcessRound, useNextRound, useEliminatePlayer, useSubmitMrWhiteGuess } from "@/lib/hooks";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,9 @@ function RoundContent() {
   const [hasSubmittedDescription, setHasSubmittedDescription] = useState(false);
   const [hasSubmittedVote, setHasSubmittedVote] = useState(false);
   const [showingEliminationPanel, setShowingEliminationPanel] = useState(false);
+  const [showingMrWhiteGuess, setShowingMrWhiteGuess] = useState(false);
+  const [mrWhiteGuess, setMrWhiteGuess] = useState('');
+  const [eliminatedMrWhitePlayer, setEliminatedMrWhitePlayer] = useState<any>(null);
 
   // API hooks
   const { data: game, isLoading: gameLoading } = useGame(gameId);
@@ -42,6 +45,7 @@ function RoundContent() {
   const processRoundMutation = useProcessRound();
   const nextRoundMutation = useNextRound();
   const eliminatePlayerMutation = useEliminatePlayer();
+  const submitMrWhiteGuessMutation = useSubmitMrWhiteGuess();
 
   // Auto-refresh current round every 3 seconds during active gameplay
   useEffect(() => {
@@ -106,12 +110,23 @@ function RoundContent() {
   };
 
   const handleNextRound = async () => {
-    try {
-      await nextRoundMutation.mutateAsync(gameId);
-      console.log('Next round started');
-    } catch (error) {
-      console.error('Failed to start next round:', error);
-    }
+    // After elimination, just reset to description phase - no API call needed
+    console.log('Starting next round (resetting to description phase)');
+    
+    // Reset all local state to start fresh
+    setGamePhase('describing');
+    setCurrentPlayerIndex(0);
+    setSelectedVoteTarget('');
+    setSelectedEliminationTarget('');
+    setDescription('');
+    setHasSubmittedDescription(false);
+    setHasSubmittedVote(false);
+    setShowingEliminationPanel(false);
+    setShowingMrWhiteGuess(false);
+    setMrWhiteGuess('');
+    setEliminatedMrWhitePlayer(null);
+    
+    // Note: We don't call the API - just continue with the current round
   };
 
   const handleEliminatePlayer = async () => {
@@ -142,7 +157,20 @@ function RoundContent() {
       
       console.log('Player eliminated successfully:', result);
       
-      // Show elimination result
+      // Check if eliminated player is Mr. White
+      if (result.role === 'mr_white' && !result.gameFinished) {
+        // Show Mr. White guess input instead of elimination result
+        setEliminatedMrWhitePlayer({
+          ...result.eliminatedPlayer,
+          name: playerName
+        });
+        setShowingMrWhiteGuess(true);
+        setShowingEliminationPanel(false);
+        setSelectedEliminationTarget('');
+        return; // Don't proceed to normal elimination flow
+      }
+      
+      // Normal elimination flow (not Mr. White or game finished)
       if (result.gameFinished) {
         alert(`${playerName} eliminated! Game finished - ${result.winner} wins!`);
         handleEndGame(); // Navigate to results
@@ -157,6 +185,49 @@ function RoundContent() {
       console.error('Failed to eliminate player:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
       alert(`Failed to eliminate player: ${errorMessage}`);
+    }
+  };
+
+  const handleSubmitMrWhiteGuess = async () => {
+    if (!mrWhiteGuess.trim()) {
+      alert("Please enter your guess for the civilian word.");
+      return;
+    }
+
+    if (!eliminatedMrWhitePlayer?.id) {
+      alert("Error: Mr. White player information not found.");
+      return;
+    }
+
+    try {
+      const result = await submitMrWhiteGuessMutation.mutateAsync({
+        gameId: gameId,
+        gamePlayerId: eliminatedMrWhitePlayer.id, // This should be the GamePlayer ID
+        guess: mrWhiteGuess.trim()
+      });
+      
+      console.log('Mr. White guess submitted:', result);
+      
+      if (result.correct && result.gameFinished) {
+        alert(`🎉 Correct! Mr. White wins the game!`);
+        handleEndGame(); // Navigate to results
+      } else if (!result.correct && result.gameFinished) {
+        alert(`❌ Wrong guess! Game continues and ${result.winner} wins!`);
+        handleEndGame(); // Navigate to results
+      } else if (!result.correct) {
+        alert(`❌ Wrong guess! Mr. White is eliminated and the game continues.`);
+        setGamePhase('results'); // Show round results
+      }
+      
+      // Reset Mr. White guess state
+      setShowingMrWhiteGuess(false);
+      setMrWhiteGuess('');
+      setEliminatedMrWhitePlayer(null);
+      
+    } catch (error: any) {
+      console.error('Failed to submit Mr. White guess:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      alert(`Failed to submit guess: ${errorMessage}`);
     }
   };
 
@@ -500,9 +571,8 @@ function RoundContent() {
                 <div className="flex gap-2 justify-center">
                   <Button 
                     onClick={handleNextRound}
-                    disabled={nextRoundMutation.isPending}
                   >
-                    Next Round
+                    Continue Playing
                   </Button>
                   <Button 
                     onClick={handleEndGame}
@@ -510,6 +580,62 @@ function RoundContent() {
                   >
                     End Game
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Mr. White Final Guess */}
+            {showingMrWhiteGuess && eliminatedMrWhitePlayer && (
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                  <p className="font-semibold text-purple-800 dark:text-purple-200 mb-2">
+                    ⚪ Mr. White's Final Chance!
+                  </p>
+                  <p className="text-sm text-purple-700 dark:text-purple-300">
+                    {eliminatedMrWhitePlayer.name} (Mr. White) has been eliminated! 
+                    They have one chance to guess the civilian word and win the game.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Enter your guess for the civilian word:
+                    </label>
+                    <Input
+                      type="text"
+                      value={mrWhiteGuess}
+                      onChange={(e) => setMrWhiteGuess(e.target.value)}
+                      placeholder="Type your guess here..."
+                      className="w-full"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && mrWhiteGuess.trim()) {
+                          handleSubmitMrWhiteGuess();
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 justify-center">
+                    <Button 
+                      onClick={handleSubmitMrWhiteGuess}
+                      disabled={!mrWhiteGuess.trim() || submitMrWhiteGuessMutation.isPending}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      {submitMrWhiteGuessMutation.isPending ? "Submitting..." : "Submit Guess"}
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        setShowingMrWhiteGuess(false);
+                        setMrWhiteGuess('');
+                        setEliminatedMrWhitePlayer(null);
+                        setGamePhase('results'); // Show normal elimination result
+                      }}
+                      variant="outline"
+                    >
+                      Skip Guess
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

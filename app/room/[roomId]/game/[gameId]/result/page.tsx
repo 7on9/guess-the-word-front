@@ -53,16 +53,46 @@ function GameResultContent() {
   }
 
   const getWinnerInfo = () => {
-    // This would come from the backend game result
-    // For now, we'll show based on game status
     if (game.status === 'completed' || game.status === 'finished') {
-      return {
-        team: 'Civilians', // This should come from backend
-        icon: '👥',
-        color: 'text-green-600',
-        bgColor: 'bg-green-50 dark:bg-green-900/20',
-        borderColor: 'border-green-200 dark:border-green-800'
-      };
+      // Debug log to see what the backend returns
+      console.log('Game winnerRole from backend:', game.winnerRole);
+      
+      // Use the actual winnerRole from the backend
+      switch (game.winnerRole) {
+        case 'civilians':
+          return {
+            team: 'Civilians',
+            icon: '👥',
+            color: 'text-green-600',
+            bgColor: 'bg-green-50 dark:bg-green-900/20',
+            borderColor: 'border-green-200 dark:border-green-800'
+          };
+        case 'undercover':
+          return {
+            team: 'Undercover',
+            icon: '🕵️',
+            color: 'text-red-600',
+            bgColor: 'bg-red-50 dark:bg-red-900/20',
+            borderColor: 'border-red-200 dark:border-red-800'
+          };
+        case 'mr_white':
+          return {
+            team: 'Mr. White',
+            icon: '⚪',
+            color: 'text-purple-600',
+            bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+            borderColor: 'border-purple-200 dark:border-purple-800'
+          };
+        default:
+          // Fallback if winnerRole is not set
+          return {
+            team: 'Unknown',
+            icon: '❓',
+            color: 'text-gray-600',
+            bgColor: 'bg-gray-50 dark:bg-gray-900/20',
+            borderColor: 'border-gray-200 dark:border-gray-800'
+          };
+      }
     }
     return null;
   };

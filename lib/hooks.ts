@@ -37,6 +37,7 @@ export interface Game {
   createdAt: string;
   startedAt?: string;
   endedAt?: string;
+  winnerRole?: 'civilians' | 'undercover' | 'mr_white';
   gamePlayers: Array<GamePlayerRelation>;
   players?: Array<GamePlayer>; // Computed field for backward compatibility
   rolesAssigned?: boolean;
@@ -508,6 +509,32 @@ export const useEliminatePlayer = () => {
     }> => {
       const response = await api.post(`/games/${data.gameId}/eliminate-player`, {
         playerId: data.playerId
+      });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId] });
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId, "current-round"] });
+    },
+  });
+};
+
+export const useSubmitMrWhiteGuess = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: { 
+      gameId: string; 
+      gamePlayerId: string; 
+      guess: string; 
+    }): Promise<{
+      correct: boolean;
+      gameFinished: boolean;
+      winner?: string;
+    }> => {
+      const response = await api.post(`/games/${data.gameId}/mr-white-guess`, {
+        gamePlayerId: data.gamePlayerId,
+        guess: data.guess
       });
       return response.data;
     },
