@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Users, Gamepad2, Plus, Play, Trophy } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function RoomDetailPage() {
   return (
@@ -22,12 +22,23 @@ function RoomDetailContent() {
   const params = useParams();
   const roomId = params.roomId as string;
   const [isCreatingGame, setIsCreatingGame] = useState(false);
+
+  const { data: room, isLoading: roomLoading, error: roomError } = useRoom(roomId);
+  const { data: group, isLoading: groupLoading } = useGroup(room?.groupId || '');
+  
+  // Initialize gameMode from room's gameMode
   const [gameMode, setGameMode] = useState<'classic' | 'extended'>('classic');
   const [undercoverCount, setUndercoverCount] = useState(1);
   const [mrWhiteCount, setMrWhiteCount] = useState(0);
 
-  const { data: room, isLoading: roomLoading, error: roomError } = useRoom(roomId);
-  const { data: group, isLoading: groupLoading } = useGroup(room?.groupId || '');
+  // Update gameMode and mrWhiteCount when room data loads
+  useEffect(() => {
+    if (room) {
+      setGameMode(room.gameMode);
+      setMrWhiteCount(room.gameMode === 'extended' ? 1 : 0);
+    }
+  }, [room]);
+
   const createGameMutation = useCreateGame();
   const addPlayersToGameMutation = useAddMultiplePlayersToGame();
 

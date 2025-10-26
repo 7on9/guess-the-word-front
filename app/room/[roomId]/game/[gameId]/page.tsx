@@ -1,13 +1,14 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useGame, useStartGame, useReorderGamePlayers } from "@/lib/hooks";
+import { useGame, useStartGame, useReorderGamePlayers, useConfigureGameRoles, useRevealPlayerRole } from "@/lib/hooks";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Play, Clock, Trophy, Users, Move, GripVertical } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Play, Clock, Trophy, Users, Move, GripVertical, Shield, Eye, EyeOff, Settings, Shuffle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function GameDetailPage() {
   return (
@@ -25,10 +26,28 @@ function GameDetailContent() {
   // Reorder state
   const [reorderMode, setReorderMode] = useState(false);
   const [localPlayerOrder, setLocalPlayerOrder] = useState<Array<{id: string, gamePlayerId: string, name: string, avatar?: string, role?: 'civilian' | 'undercover' | 'mr_white', isEliminated: boolean, orderIndex: number}>>([]);
+  
+  // Role assignment and revelation state
+  const [undercoverCount, setUndercoverCount] = useState(1);
+  const [mrWhiteCount, setMrWhiteCount] = useState(0);
+  const [currentRevealingPlayerIndex, setCurrentRevealingPlayerIndex] = useState(0);
+  const [revealedRole, setRevealedRole] = useState<{ role: string; word: string | null } | null>(null);
+  const [showingRole, setShowingRole] = useState(false);
+  const [wordRevealed, setWordRevealed] = useState(false);
 
   const { data: game, isLoading, error } = useGame(gameId);
   const startGameMutation = useStartGame();
   const reorderPlayersMutation = useReorderGamePlayers();
+  const configureRolesMutation = useConfigureGameRoles();
+  const revealRoleMutation = useRevealPlayerRole();
+
+  // Initialize role counts from game data when it loads
+  useEffect(() => {
+    if (game) {
+      setUndercoverCount(game.undercoverCount);
+      setMrWhiteCount(game.mrWhiteCount);
+    }
+  }, [game]);
 
   // Debug logging
   console.log("Game data loaded:", {
@@ -37,17 +56,70 @@ function GameDetailContent() {
     gamePlayers: game?.gamePlayers,
     players: game?.players,
     playersCount: game?.players?.length || 0,
+    undercoverCount: game?.undercoverCount,
+    mrWhiteCount: game?.mrWhiteCount,
     isLoading,
     error
   });
 
-  const handleStartGame = async () => {
-    if (!confirm("Are you sure you want to start this game?")) return;
+  const handleConfigureAndStartGame = async () => {
+    if (!confirm("Are you sure you want to configure roles and start the game? This cannot be undone!")) return;
 
     try {
+      // First configure the roles
+      await configureRolesMutation.mutateAsync({
+        gameId: gameId,
+        undercoverCount: undercoverCount,
+        mrWhiteCount: mrWhiteCount
+      });
+      console.log("Roles configured successfully");
+
+      // Then start the game (this will assign roles automatically)
       await startGameMutation.mutateAsync(gameId);
+      console.log("Game started and roles assigned successfully");
     } catch (error) {
-      console.error("Failed to start game:", error);
+      console.error("Failed to configure roles and start game:", error);
+    }
+  };
+
+  const handleRevealRole = async () => {
+    if (!game?.players || currentRevealingPlayerIndex >= game.players.length) return;
+
+    const player = game.players[currentRevealingPlayerIndex];
+    
+    try {
+      const roleData = await revealRoleMutation.mutateAsync({
+        gameId: gameId,
+        playerId: player.id
+      });
+      
+      setRevealedRole(roleData);
+      setShowingRole(true);
+    } catch (error) {
+      console.error("Failed to reveal role:", error);
+    }
+  };
+
+  const handleRoleRevealed = () => {
+    setShowingRole(false);
+    setRevealedRole(null);
+    setWordRevealed(false);
+    
+    if (game?.players && currentRevealingPlayerIndex < game.players.length - 1) {
+      setCurrentRevealingPlayerIndex(currentRevealingPlayerIndex + 1);
+    }
+  };
+
+  const handleStartRound = async () => {
+    if (!confirm("Are you sure you want to start Round 1? All players have seen their roles!")) return;
+
+    try {
+      // This could be an endpoint to start the actual round/gameplay
+      console.log("Starting Round 1...");
+      // For now, we'll use the existing start game endpoint
+      // But the game should already be started at this point
+    } catch (error) {
+      console.error("Failed to start round:", error);
     }
   };
 
@@ -232,40 +304,145 @@ function GameDetailContent() {
             <CardTitle>Game Controls</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Phase 1: Configure Roles and Start Game */}
             {(game?.status === 'waiting' || game?.status === 'not_started') && (
-              <div className="space-y-2">
-                <p className="text-muted-foreground">
-                  The game is ready to start. Make sure all players are ready before starting.
-                </p>
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">Phase 1: Configure Roles & Start Game</h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                    Set the number of undercover players and Mr. White, then start the game. Roles will be assigned automatically.
+                  </p>
+                  
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="text-sm font-medium">Civilian Players</label>
+                      <div className="text-lg font-semibold text-green-600">
+                        {(game?.players?.length || 0) - undercoverCount - mrWhiteCount}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Undercover Players</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={Math.floor((game?.players?.length || 3) / 2)}
+                        value={undercoverCount}
+                        onChange={(e) => setUndercoverCount(parseInt(e.target.value))}
+                      />
+                    </div>
+                    {game?.gameMode === 'extended' && (
+                      <div>
+                        <label className="text-sm font-medium">Mr. White Players</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="1"
+                          value={mrWhiteCount}
+                          onChange={(e) => setMrWhiteCount(parseInt(e.target.value))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <Button 
-                  onClick={handleStartGame}
-                  disabled={startGameMutation.isPending}
+                  onClick={handleConfigureAndStartGame}
+                  disabled={configureRolesMutation.isPending || startGameMutation.isPending || !game?.players || game.players.length < 3}
                   className="flex items-center gap-2"
                 >
                   <Play className="h-4 w-4" />
-                  {startGameMutation.isPending ? "Starting..." : "Start Game"}
+                  {(configureRolesMutation.isPending || startGameMutation.isPending) ? "Starting Game..." : "Configure & Start Game"}
                 </Button>
               </div>
             )}
 
+            {/* Phase 2: Role Revelation */}
             {(game?.status === 'active' || game?.status === 'in_progress') && (
-              <div className="space-y-2">
-                <p className="text-muted-foreground">
-                  The game is currently active. Players can participate in rounds.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline">
-                    Start New Round
-                  </Button>
-                  <Button variant="outline">
-                    View Current Round
-                  </Button>
-                  <Button variant="destructive">
-                    End Game
-                  </Button>
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 mb-2">Phase 2: Role Revelation</h4>
+                  <p className="text-sm text-purple-700 dark:text-purple-300 mb-4">
+                    Each player will privately see their role. Pass the device to each player one by one.
+                  </p>
+                  
+                  {game?.players && currentRevealingPlayerIndex < game.players.length && (
+                    <div className="mb-4">
+                      <p className="text-sm font-medium mb-2">
+                        Current player: <span className="text-lg font-bold">{game.players[currentRevealingPlayerIndex]?.name}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Player {currentRevealingPlayerIndex + 1} of {game.players.length}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
+                {!showingRole ? (
+                  <Button 
+                    onClick={handleRevealRole}
+                    disabled={revealRoleMutation.isPending || !game?.players}
+                    className="flex items-center gap-2 w-full"
+                  >
+                    <Eye className="h-4 w-4" />
+                    {revealRoleMutation.isPending ? "Revealing..." : "Click to Reveal Your Word"}
+                  </Button>
+                ) : (
+                  <div className="space-y-4">
+                    {!wordRevealed ? (
+                      <Button 
+                        onClick={() => setWordRevealed(true)}
+                        className="flex items-center gap-2 w-full h-32 text-xl"
+                        variant="secondary"
+                      >
+                        <Eye className="h-6 w-6" />
+                        Tap to See Your Word
+                      </Button>
+                    ) : (
+                      <>
+                        <div className="p-6 bg-gray-900 text-white rounded-lg text-center">
+                          {revealedRole?.word ? (
+                            <div>
+                              <p className="text-lg mb-2">Your word is:</p>
+                              <p className="text-4xl font-bold text-yellow-400">
+                                {revealedRole.word}
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-2xl font-bold text-red-400 mb-2">⚪ Mr. White</p>
+                              <p className="text-yellow-400">You don't know the word! Try to figure it out.</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <Button 
+                          onClick={handleRoleRevealed}
+                          variant="outline"
+                          className="flex items-center gap-2 w-full"
+                        >
+                          <EyeOff className="h-4 w-4" />
+                          OK - Pass to Next Player
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {game?.players && currentRevealingPlayerIndex >= game.players.length && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <p className="text-green-800 dark:text-green-200 font-semibold">
+                        ✅ All players have seen their roles! The game is ready to play.
+                      </p>
+                      <p className="text-sm text-green-700 dark:text-green-300 mt-2">
+                        You can now navigate to the rounds page or scoreboard to manage the game.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
 
             {(game?.status === 'finished' || game?.status === 'completed') && (
               <div className="space-y-2">
@@ -401,8 +578,7 @@ function GameDetailContent() {
                       <p className="font-semibold">{player.name}</p>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>Turn Order: #{player.orderIndex || index + 1}</span>
-                        {player.role && <span>Role: {player.role}</span>}
-                        {player.isEliminated && <span className="text-red-500">Eliminated</span>}
+                        {player.isEliminated && <span className="text-red-500">❌ Eliminated</span>}
                       </div>
                     </div>
                     

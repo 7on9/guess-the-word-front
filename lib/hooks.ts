@@ -39,6 +39,8 @@ export interface Game {
   endedAt?: string;
   gamePlayers: Array<GamePlayerRelation>;
   players?: Array<GamePlayer>; // Computed field for backward compatibility
+  rolesAssigned?: boolean;
+  currentRevealingPlayer?: number; // Index of player currently revealing their role
 }
 
 export interface GamePlayerRelation {
@@ -344,6 +346,32 @@ export const useCreateGame = () => {
   });
 };
 
+export const useConfigureGameRoles = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: { gameId: string; undercoverCount: number; mrWhiteCount: number }): Promise<Game> => {
+      const response = await api.put(`/games/${data.gameId}/roles`, {
+        undercoverCount: data.undercoverCount,
+        mrWhiteCount: data.mrWhiteCount
+      });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId] });
+    },
+  });
+};
+
+export const useRevealPlayerRole = () => {
+  return useMutation({
+    mutationFn: async (data: { gameId: string; playerId: string }): Promise<{ role: string; word: string | null }> => {
+      const response = await api.get(`/games/${data.gameId}/players/${data.playerId}/role`);
+      return response.data;
+    },
+  });
+};
+
 export const useStartGame = () => {
   const queryClient = useQueryClient();
   
@@ -357,25 +385,6 @@ export const useStartGame = () => {
   });
 };
 
-export const useConfigureGameRoles = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (data: { 
-      gameId: string; 
-      undercoverCount: number; 
-      mrWhiteCount: number 
-    }): Promise<void> => {
-      await api.put(`/games/${data.gameId}/roles`, {
-        undercoverCount: data.undercoverCount,
-        mrWhiteCount: data.mrWhiteCount,
-      });
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["games", variables.gameId] });
-    },
-  });
-};
 
 // Word Management Hooks
 export const useWords = () =>
