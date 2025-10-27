@@ -1,11 +1,11 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useGame, useGameHistory } from "@/lib/hooks";
+import { useParams, useRouter } from "next/navigation";
+import { useGame, useGameHistory, useCreateGame, useAddMultiplePlayersToGame } from "@/lib/hooks";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Users, Clock, Target, Crown, Shield } from "lucide-react";
+import { ArrowLeft, Trophy, Users, Clock, Target, Crown, Shield, PlayCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function GameResultPage() {
@@ -18,11 +18,14 @@ export default function GameResultPage() {
 
 function GameResultContent() {
   const params = useParams();
+  const router = useRouter();
   const roomId = params.roomId as string;
   const gameId = params.gameId as string;
 
   const { data: game, isLoading: gameLoading } = useGame(gameId);
   const { data: gameHistory, isLoading: historyLoading } = useGameHistory(gameId);
+  const createGameMutation = useCreateGame();
+  const addPlayersToGameMutation = useAddMultiplePlayersToGame();
 
   if (gameLoading || historyLoading) {
     return (
@@ -51,6 +54,58 @@ function GameResultContent() {
       </div>
     );
   }
+
+  const handleCreateNewGame = async () => {
+    if (!game) return;
+
+    try {
+      console.log('Creating new game with same configuration...', {
+        roomId,
+        gameMode: game.gameMode,
+        undercoverCount: game.undercoverCount,
+        mrWhiteCount: game.mrWhiteCount,
+        currentPlayers: game.players?.length
+      });
+
+      // Create new game with same configuration
+      const newGame = await createGameMutation.mutateAsync({
+        roomId: roomId,
+        gameMode: game.gameMode as 'classic' | 'extended',
+        undercoverCount: game.undercoverCount,
+        mrWhiteCount: game.mrWhiteCount,
+      });
+
+      console.log('New game created:', newGame);
+
+      // Add all players from the previous game to the new game
+      if (game.players && game.players.length > 0) {
+        const playersToAdd = game.players.map(p => ({
+          name: p.name,
+          avatar: p.avatar
+        }));
+        
+        try {
+          await addPlayersToGameMutation.mutateAsync({
+            gameId: newGame.id,
+            players: playersToAdd
+          });
+          
+          console.log('Players added to new game successfully');
+        } catch (error) {
+          console.error('Failed to add players to new game:', error);
+          alert('Game created but failed to add players. You can add them manually.');
+        }
+      }
+
+      // Navigate to the new game
+      router.push(`/room/${roomId}/game/${newGame.id}`);
+      
+    } catch (error: any) {
+      console.error('Failed to create new game:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      alert(`Failed to create new game: ${errorMessage}`);
+    }
+  };
 
   const getWinnerInfo = () => {
     if (game.status === 'completed' || game.status === 'finished') {
@@ -121,6 +176,18 @@ function GameResultContent() {
                 {game.gameMode === 'classic' ? 'Classic Mode' : 'Extended Mode'}
               </p>
             </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleCreateNewGame}
+              disabled={createGameMutation.isPending || addPlayersToGameMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+              title="Create a new game with the same players and settings but a different word"
+            >
+              <PlayCircle className="h-4 w-4 mr-2" />
+              {createGameMutation.isPending || addPlayersToGameMutation.isPending ? "Creating..." : "New Game"}
+            </Button>
           </div>
         </div>
 
