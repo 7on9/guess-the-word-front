@@ -562,9 +562,17 @@ function RoundContent() {
 
                 {currentRound.eliminatedPlayerId && (
                   <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="font-semibold text-red-800 dark:text-red-200">
-                      Player Eliminated: {game.players?.find(p => p.gamePlayerId === currentRound.eliminatedPlayerId)?.name}
-                    </p>
+                    {(() => {
+                      const eliminatedPlayer = game.players?.find(p => p.gamePlayerId === currentRound.eliminatedPlayerId);
+                      return (
+                        <p className="font-semibold text-red-800 dark:text-red-200 flex items-center gap-2">
+                          Player Eliminated: {eliminatedPlayer?.name}
+                          {eliminatedPlayer?.role === 'civilian' && <><span className="text-blue-600">👥</span> (Civilian)</>}
+                          {eliminatedPlayer?.role === 'undercover' && <><span className="text-red-600">🕵️</span> (Undercover)</>}
+                          {eliminatedPlayer?.role === 'mr_white' && <><span className="text-purple-600">⚪</span> (Mr. White)</>}
+                        </p>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -665,7 +673,14 @@ function RoundContent() {
                       <div className="font-semibold">{player.name}</div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>#{player.orderIndex || index + 1}</span>
-                        {player.isEliminated && <span className="text-red-500">❌ Eliminated</span>}
+                        {player.isEliminated && (
+                          <span className="text-red-500 flex items-center gap-1">
+                            ❌ Eliminated - 
+                            {player.role === 'civilian' && <><span className="text-blue-600">👥</span> Civilian</>}
+                            {player.role === 'undercover' && <><span className="text-red-600">🕵️</span> Undercover</>}
+                            {player.role === 'mr_white' && <><span className="text-purple-600">⚪</span> Mr. White</>}
+                          </span>
+                        )}
                         {player.gamePlayerId === currentRound.starterId && !player.isEliminated && (
                           <span className="text-yellow-600">👑 Speaking</span>
                         )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useProfile, isAuthenticated } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -12,52 +12,31 @@ interface AuthGuardProps {
 export function AuthGuard({ children, redirectTo = "/auth/login" }: AuthGuardProps) {
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
-  const { data: user, isLoading, error } = useProfile();
 
-  // Set client flag after hydration
   useEffect(() => {
     setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    // Only run on client side
-    if (!isClient) return;
     
-    // Check if we have a token first
+    // Simple token check - if no token, redirect
     if (!isAuthenticated()) {
       router.push(redirectTo);
-      return;
     }
-    
-    // If profile query failed and we're not loading, redirect
-    if (!isLoading && (!user || error)) {
-      router.push(redirectTo);
-    }
-  }, [user, isLoading, error, router, redirectTo, isClient]);
+  }, [router, redirectTo]);
 
-  // Show loading state while checking auth or during SSR
-  if (!isClient || isLoading) {
+  // During SSR hydration - show minimal loading to prevent flash
+  if (!isClient) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-muted-foreground">Checking authentication...</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        {/* Minimal blank state during hydration */}
       </div>
     );
   }
 
-  // Show error or redirect state (only on client side)
-  if (isClient && (!isAuthenticated() || !user || error)) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <p className="text-muted-foreground">Redirecting to login...</p>
-        </div>
-      </div>
-    );
+  // No token - redirect is happening
+  if (!isAuthenticated()) {
+    return null;
   }
 
-  // User is authenticated, show the protected content
+  // Token exists - show content immediately
+  // If token is expired, the API 401 interceptor will handle it
   return <>{children}</>;
 }
